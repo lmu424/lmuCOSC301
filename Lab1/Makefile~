@@ -1,0 +1,18 @@
+CC = gcc
+CFLAGS = -g -Wall
+OBJS = lab01.o main.o
+DEPS = lab01.h
+TARGET = lab01
+
+
+
+myapp: lab01.c main.c
+	gcc -c lab01.c 
+	gcc -c main.c 
+	gcc -o lab01.o main.o
+
+$(TARGET): $(OBJS)
+	$(CC) $(OBJS) -o $@
+
+.c.o = $(DEPS)
+	$(CC) -c &< $(CFLAGS)
