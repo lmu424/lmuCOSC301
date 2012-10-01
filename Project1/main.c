@@ -23,35 +23,7 @@
 #include <assert.h>
 
 
-/*
-char * * tokenify(char * str, char * temp){
-	char * * array = malloc(sizeof(char *));
-	int i = 0;
-	char * x;
-	if ((x = strtok(str, temp)) != NULL){
-		char * * newarray = malloc(sizeof(char *) * (i+1));
-		memcpy(newarray, array, sizeof(char *)*(i+1));
-		free(array);
-		array = newarray;
-		array[i] = x;
-		i++;
-	}
-	while ((x = strtok(NULL, temp)) != NULL) {
-		char * * newarray = malloc(sizeof(char *) * (i+1));
-		memcpy(newarray, array, sizeof(char *)*(i+1));
-		free(array);
-		array = newarray;
-		array[i] = x;
-		i++;
-	}
-	char * * newarray = malloc(sizeof(char *) * (i+1));
-	memcpy(newarray, array, sizeof(char *)*(i+1));
-	free(array);
-	array = newarray;
-	array[i] = NULL;
-	return array;
-} 
-*/
+
 char ** tokenify(char *s, char *t)
 {
     //const char *sep=" \t\n";
@@ -121,50 +93,66 @@ int main(int argc, char **argv) {
 			break;
 	}
 	}
-	char ***cmd = NULL;
-	cmd = tokenify(buffer, ";");
+	
+	// have 1st array with sep by ;, then put into new array **newarr[32] (or walk through and figure out how big to make it)
+	char ** cmd1 = tokenify(buffer, ";");
+	int w = 0;
+	while (cmd1[w] != NULL){
+		w++;
+	}
+	char ** cmd[w];
 	//cmd = test; 
 	i = 0;
 	char temp[4] = {' ', '\n', '\t', '\0'};
- 	while (cmd[i] != NULL){
-		cmd[i] = tokenify(cmd[i], temp);
+ 	while (i != w){
+		cmd[i] = tokenify(cmd1[i], temp);
+		cmd[w] = NULL;
 		i++;
 	}
 	i = 0;
-	//if (curMode == 0){
+
+	int count = 0;
 	while (cmd[i] != NULL){
-        pid_t p = fork();
-        if (p == 0) {
-            /* in child */
-            if (execv(cmd[i][0], cmd[i]) < 0) {
-		if (strcasecmp(cmd[i][0], "mode") == 0){
-			curMode = ourMode(cmd[0], curMode);}
-		else if (strcasecmp(cmd[i][0], "exit") == 0){
+		if (strcasecmp(cmd[i][0], "mode") == 0 || strcasecmp(cmd[i][0], "exit") == 0){
+			if (strcasecmp(cmd[i][0], "mode") == 0){
+			curMode = ourMode(cmd[i], curMode);
+			}
+			else {
 			printf ("This is exit.\n");
+			 }
 		}
-		else {
-                fprintf(stderr, "execv failed: %s\n", strerror(errno));
-	}
-	if (curMode == 0){
-	int rstatus = 0;
-        p = wait(&rstatus);
-            } }
+      		 else {
+			pid_t p = fork();
+			count++;
+	        	if (p == 0) {
+	            	/* in child */
+	            		if (execv(cmd[i][0], cmd[i]) < 0) {
+					fprintf(stderr, "execv failed: %s\n", strerror(errno));
+	                		// only way we get here is if execv fails.
+			                exit(-1);}
+			}
+				
 
-        } else if (p > 0) {
-            /* in parent */
-            int rstatus = 0;
-            pid_t childp = wait(&rstatus);
 
+
+
+        		else if (p > 0) {
+           		/* in parent */
+				if (curMode == 0){
+           			int rstatus = 0;
+            			pid_t childp = wait(&rstatus);
             /* for this simple starter code, the only child process we should
                "wait" for is the one we just spun off, so check that we got the
                same process id */ 
-            assert(p == childp);
-
+            			assert(p == childp);
+				}
             //printf("Parent got carcass of child process %d, return val %d\n", childp, rstatus);
-        } else {
-            /* fork had an error; bail out */
-            fprintf(stderr, "fork failed: %s\n", strerror(errno));
-        }
+       			} 
+			else {
+           		 /* fork had an error; bail out */
+           			 fprintf(stderr, "fork failed: %s\n", strerror(errno));
+        		}
+		}
 	//int rstatus = 0;
 	//p = wait(&rstatus);
         printf("%s", prompt);
@@ -172,7 +160,15 @@ int main(int argc, char **argv) {
 	
 	i++; } 
 	//}
-    }
-	
+	int j = 0;
+    	if (curMode == 1){
+		for (; j <= count; j++){
+			int rstatus = -1;
+            		pid_t childp = wait(&rstatus);
+			(void) childp;
+			
+		}
+	}
+	}
     return 0;
 }
