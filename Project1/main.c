@@ -2,6 +2,7 @@
  * project 1 (shell) main.c template 
  *
  * project partner names and other information up here, please
+ * here's another lame comment.
  *
  */
 
