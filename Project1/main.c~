@@ -1,7 +1,7 @@
 /*
  *
  * Laura Uhlig and Sebastian Sigmon
- * Extra information goes here.
+ * We both discussed our conceptual plans for the project and outline how we should go about it.  Laura did the coding for the initial separating the command line, fixing tokenify and creating the mode method, and implementing parallel and sequential modes. Sebastian then fixed memory leaks, printed the usage, and ensured all weird imputs would be dealt with without crashing, along with the coding for part 2. 
  *
  */
 
@@ -77,22 +77,26 @@ void setState(pid_t pid, int state, struct node *list){
 	}
 }
 
-//Tokenify a string by a given character.
-char ** tokenify(char *s, char *t){
+char ** tokenify(char *s, char *t)
+//Used the tokenify function from our lab that we had to fix
+{
+    
     char *word = NULL;
+
     // find out exactly how many tokens we have
     int words = 0;
     char * temp = strdup(s);
-    //int a = 0;
     for (word = strtok(temp, t); word; word = strtok(NULL, t)){
 	words++;
     }
     free (temp);
 
+
     // allocate the array of char *'s, with one additional
     char **array = malloc(sizeof(char*)*(words+1));
     int i = 0;
-    for (word = strtok(s, t); word; word = strtok(NULL, t)){
+    for (word = strtok(s, t); word; word = strtok(NULL, t)) 
+{
         //printf("adding word %s to array pos %d\n", word, i);
         array[i] = strdup(word);
         i++;
@@ -101,24 +105,28 @@ char ** tokenify(char *s, char *t){
     return array;
 }
 
-//Handle mode changes and messages.
-int ourMode(char ** str, int x){
+
+int ourMode(char ** str, int x)
+//Whenever a 'mode' command is sent
+{
 	if (str[1] == NULL) {
+	//prints what mode we're currently in
 		if (x==1) printf("Current mode is parallel. \n");
 		if (x==0) printf("Current mode is sequential. \n");	
 		return x;
 	}
 	else if (strcasecmp(str[1], "parallel") == 0 || strcmp(str[1], "p") == 0) {
+	//changes to parallel by changing our mode variable
 		x = 1;
-		//printf("Current mode: parallel\n");
 		return x;
 	}
 	else if (strcasecmp(str[1],"sequential") == 0 || strcmp(str[1], "s") == 0) {
+	//changes to sequential
 		x = 0;
-		//printf("Current mode: sequential\n");
 		return x;
 	}
 	else {
+	//someone typed something funny after mode and we can't do anything with it
 		printf("Error on input. Try again.\n");
 		return x;
 	}
