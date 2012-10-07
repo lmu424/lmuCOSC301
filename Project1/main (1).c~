@@ -1,0 +1,259 @@
+/*
+ * Project 1
+	Laura Uhlig and Sebastian Sigmon
+
+ */
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include <ctype.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <poll.h>
+#include <signal.h>
+#include <errno.h>
+#include <assert.h>
+
+
+
+char ** tokenify(char *s, char *t)
+//Used the tokenify function from our lab that we had to fix
+{
+    
+    char *word = NULL;
+
+    // find out exactly how many tokens we have
+    int words = 0;
+    char * temp = strdup(s);
+    for (word = strtok(temp, t); word; word = strtok(NULL, t)){
+	words++;
+    }
+    free (temp);
+
+
+    // allocate the array of char *'s, with one additional
+    char **array = malloc(sizeof(char*)*(words+1));
+    int i = 0;
+    for (word = strtok(s, t); word; word = strtok(NULL, t)) 
+{
+        //printf("adding word %s to array pos %d\n", word, i);
+        array[i] = strdup(word);
+        i++;
+    }
+    array[i] = NULL;
+    return array;
+}
+
+int ourMode(char ** str, int x)
+//Whenever a 'mode' command is sent
+{
+	if (str[1] == NULL) {
+	//prints what mode we're currently in
+		if (x==1) printf("Current mode is parallel. \n");
+		if (x==0) printf("Current mode is sequential. \n");	
+		return x;
+	}
+	else if (strcasecmp(str[1], "parallel") == 0 || strcmp(str[1], "p") == 0) {
+	//changes to parallel by changing our mode variable
+		x = 1;
+		return x;
+	}
+	else if (strcasecmp(str[1],"sequential") == 0 || strcmp(str[1], "s") == 0) {
+	//changes to sequential
+		x = 0;
+		return x;
+	}
+	else {
+	//someone typed something funny after mode and we can't do anything with it
+		printf("Error on input. Try again.\n");
+		return x;
+	}
+}
+
+void freeMem(char ***array){
+//To free all outstanding memory
+	int i = 0;
+	while(array[i] != NULL){
+		int j = 0;
+		while(array[i][j] != NULL){
+			free(array[i][j]);
+			j++;
+		}
+		free(array[i]);
+		i++;
+	}
+}
+
+void freeMem1(char **array){
+	int i = 0;
+	while(array[i] != NULL){
+		free(array[i]);
+		i++;
+	}	
+}
+
+int main(int argc, char **argv) {
+    char *prompt = "hitme> ";
+    printf("%s", prompt);
+    fflush(stdout);
+	//mode variables
+    int curMode = 0;
+    int curMode2 = 0;
+    int curModeIndex = 0;
+	//exit variable
+    int exitTrue = 1;
+    char buffer[1024];
+    while (fgets(buffer, 1024, stdin) != NULL) {
+	exitTrue = 0; //This is to ensure that if a Ctrl+D happens, we terminate properly. -S
+        /* process current command line in buffer */
+        
+        int i = 0;
+	
+	//Process command line; newline characters or comments are replaced by the null character to terminate the string.
+	for (; i<1024; i++) {
+		if (buffer[i] == '#' || buffer[i] == '\n'){
+			buffer[i] = '\0';
+			break;
+	}
+	}
+	
+	//split command line by semicolon, separating each command from the other, and place into double array
+	char ** cmd1 = tokenify(buffer, ";");
+	int w = 0;
+	//count how many commands there are
+	while (cmd1[w] != NULL){
+		w++;
+	}
+	//create triple pointer
+	char ** cmd[w];
+	cmd[0] = NULL;
+	i = 0;
+	char temp[4] = {' ', '\n', '\t', '\0'};
+	//split each command by white space
+ 	while (i != w){
+		cmd[i] = tokenify(cmd1[i], temp);
+		i++;
+	}
+	cmd[w] = NULL;
+	pid_t p;
+	pid_t pIds[i+1];//For parallel mode
+	i = 0;
+	int count = 0;
+	//go through every command
+	while (cmd[i] != NULL){
+		if (cmd[i][0] == NULL){
+			i++;
+			continue; 
+		}
+	//deal with cases if mode or exit
+		if (strcasecmp(cmd[i][0], "mode") == 0 || strcasecmp(cmd[i][0], "exit") == 0){
+			if (strcasecmp(cmd[i][0], "mode") == 0){
+				curMode2 = ourMode(cmd[i], curMode2);
+				if(cmd[i][1] != NULL){
+					curModeIndex = i;
+				}
+			}
+			else {
+	//Set exit variable so the program can exit after all other commands are processed
+				exitTrue = 1;	
+			}
+		}
+      		 else {
+			p = fork();
+	        	if (p == 0) {
+	            	/* in child */
+	            		if (execv(cmd[i][0], cmd[i]) < 0) {
+					fprintf(stderr, "execv failed: %s\n", strerror(errno));
+	                		// only way we get here is if execv fails.
+			                exit(-1);}
+			}
+        		else if (p > 0) {
+           		/* in parent */
+				if (curMode == 0){
+				//sequential mode: call wait for each forked command
+           				int rstatus = 0;
+            				pid_t childp = waitpid(p, &rstatus, 0);
+            				assert(p == childp);
+				} else {
+					//In parallel mode
+					pIds[count] = p;
+				}
+       			} 
+			else {
+           		 /* fork had an error; bail out */
+           			 fprintf(stderr, "fork failed: %s\n", strerror(errno));
+        		}
+			count++;
+		}
+        
+	
+	i++; } 
+	
+	int j = 0;
+	int rstatus = 0;
+	pid_t test;
+    	if (curMode == 1){
+	//in parallel mode: call wait at end (count kept track of the number of forked processes)
+		for (; j <= count; j++){
+            		test = waitpid(pIds[j], &rstatus, 0);
+			//(void) childp;
+		}	
+		
+	}
+
+	
+	//check for mode changes, change accordingly, and print any changes. This ensures that if numerous mode changes are put on one line, it won't confuse the order of how the other processes are handled: Only one mode change can be put into effect per line, and will not go into effect until the next line.
+	if (curMode != curMode2){
+		curMode = ourMode(cmd[curModeIndex],curMode);
+		if(curMode == 1){
+			printf("Current mode is parallel. \n");
+		} else {
+			printf("Current mode is sequential. \n");
+		}
+		curModeIndex = 0;
+	}
+
+	
+	//Clear out the old memory.
+	freeMem(cmd);
+	freeMem1(cmd1);
+	free(cmd1);
+	
+	//Break if you're exiting.
+	if(exitTrue){
+		break;
+	}
+	
+	printf("%s", prompt);
+        fflush(stdout);
+	exitTrue = 1;//Just to ensure exiting via Ctrl+D is done in true form.
+	}
+    if(exitTrue){
+		//Check and print time spent in user/kernel mode.
+		int whoParent = RUSAGE_SELF;
+		struct rusage usageParent;
+		int retParent;
+		int whoChildren = RUSAGE_CHILDREN;
+		struct rusage usageChildren;
+		int retChildren;
+		retParent = getrusage(whoParent, &usageParent);	
+		retChildren = getrusage(whoChildren, &usageChildren);
+		if(!retParent){
+			printf("Shell time in user mode: %ld.%06ld seconds. \n", usageParent.ru_utime.tv_sec, usageParent.ru_utime.tv_usec);
+			printf("Shell time in kernel mode: %ld.%06ld seconds. \n", usageParent.ru_stime.tv_sec, usageParent.ru_stime.tv_usec);
+		}
+		if(!retChildren){
+			printf("Time spent in user mode for commands: %ld.%06ld seconds. \n", usageChildren.ru_utime.tv_sec, usageChildren.ru_utime.tv_usec);
+			printf("Time spent in kernel mode for commands: %ld.%06ld seconds. \n", usageChildren.ru_stime.tv_sec, usageChildren.ru_stime.tv_usec);
+		}
+		//Exit.
+		exit(-1);
+	}
+    return 0;
+}
