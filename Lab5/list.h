@@ -1,3 +1,5 @@
+#include <pthread.h>
+
 #ifndef __LIST_H__
 #define __LIST_H__
 
@@ -12,6 +14,7 @@ struct __list_node {
 
 typedef struct {
     struct __list_node *head;
+    pthread_mutex_t themutex;
 } list_t;
 
 void list_init(list_t *);

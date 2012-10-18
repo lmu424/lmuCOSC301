@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
     }
 
     // commented out by default...
-    // list_print(thelist, stdout);
+    list_print(thelist, stdout);
 
     list_clear(thelist);
     free(thelist);

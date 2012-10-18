@@ -1,10 +1,15 @@
+
+#include <pthread.h>
 #include "list.h"
 
 /* ************************************** 
  *
  * ************************************** */
+
+
 void list_init(list_t *list) {
     list->head = NULL;
+    pthread_mutex_init (&list->themutex, NULL);
 }
 
 
@@ -12,6 +17,7 @@ void list_init(list_t *list) {
  * print the contents of the list to file f.
  * ************************************** */
 void list_print(list_t *list, FILE *f) {
+    pthread_mutex_lock(&list->themutex);
     printf("*** List Contents Begin ***\n");
     struct __list_node *tmp = list->head;
     while (tmp) {
@@ -19,6 +25,7 @@ void list_print(list_t *list, FILE *f) {
         tmp = tmp->next;
     }
     printf("*** List Contents End ***\n");
+    pthread_mutex_unlock(&list->themutex);
 }
 
 
@@ -26,12 +33,13 @@ void list_print(list_t *list, FILE *f) {
  * add item "val" to the list, in order.
  * ************************************** */
 void list_add(list_t *list, int val) {
+    pthread_mutex_lock(&list->themutex);
     struct __list_node *new_node = (struct __list_node *)malloc (sizeof(struct __list_node));
     if (!new_node) {
         fprintf(stderr, "No memory while attempting to create a new list node!\n");
         abort();
     }
-
+    
     new_node->data = val;
     new_node->next = NULL;
 
@@ -59,6 +67,7 @@ void list_add(list_t *list, int val) {
             tmp->next = new_node;
         }
     }
+    pthread_mutex_unlock(&list->themutex);
 }
 
 
@@ -72,24 +81,24 @@ int list_remove(list_t *list, int target) {
     /* short cut: is the list empty? */
     if (list->head == NULL)
         return removed;
-
+    pthread_mutex_lock(&list->themutex);
     /* check for removing items at the head */
     struct __list_node *dead = NULL;
     struct __list_node *tmp = list->head;
-    while (tmp != NULL && tmp->data == target) {
-        dead = tmp;
+    while (tmp != NULL && tmp->data == target) {       
+	dead = tmp;
         tmp = tmp->next;
         free(dead);
         removed += 1;
     }
     list->head = tmp;
-
+    pthread_mutex_unlock(&list->themutex);
     /* if we removed anything or the data at the head is greater than
        the target, we're done (since the list is sorted */
     if (removed > 0 || target < tmp->data) {
         return removed;
     }
-
+    pthread_mutex_lock(&list->themutex);
     /* find the target to destroy (if it exists). 
        keep track of previous node using dead.  */
     dead = tmp;
@@ -110,7 +119,7 @@ int list_remove(list_t *list, int target) {
             removed += 1;
         }
     }
-
+    pthread_mutex_unlock(&list->themutex);
     return removed;
 }
 
@@ -120,6 +129,7 @@ int list_remove(list_t *list, int target) {
  * elements.
  * ************************************** */
 void list_clear(list_t *list) {
+    pthread_mutex_lock(&list->themutex);
     struct __list_node *tmp = list->head;
     while (tmp) {
         struct __list_node *tmp2 = tmp->next;
@@ -127,5 +137,6 @@ void list_clear(list_t *list) {
         tmp = tmp2;
     }
     list->head = NULL;
+    pthread_mutex_unlock(&list->themutex);
 }
 
