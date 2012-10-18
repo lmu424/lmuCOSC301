@@ -1,0 +1,180 @@
+Laura Uhlig
+Lab 5
+
+2. The child will first print "CHILD: before 0", and the parent will print "PARENT: before 0".  After a thread is created, the child will then output "CHILD: after 5".  The thread's call will change the value of value in the child's memory.  However, the parent will print "PARENT: after 0".  The child copies the memory of the parent, but then has its own memory, so the runner call will only affect the child's output. 
+
+3. For procshare, the first child starts, then the second child starts. Both return counter: 10000, and the end counter is also 10000. In threadshare, the two threads are competing with one another. Both threads have different counters, and the end result is the same as the second string each time.  However, there is no pattern to what these outputs are- how counter is increased between the two threads that are trying to run at the exact same time cannot be predicted. 
+
+ 
+4.
+diff --git a/Lab5/threadshare.c b/Lab5/threadshare.c
+index 29817ba..76d24b0 100644
+--- a/Lab5/threadshare.c
++++ b/Lab5/threadshare.c
+@@ -3,6 +3,7 @@
+ #include <stdlib.h>
+ #include <pthread.h>
+ 
++pthread_mutex_t mymutex;
+ /**
+  * worker thread entry point
+  */
+@@ -13,7 +14,9 @@ void *worker(void *varg)
+     printf("thread 0x%0lx starting\n", (long)pthread_self());
+     int i = 0;
+     for (; i < 100000; i += 1) {
++       pthread_mutex_lock(&mymutex);
+         *counter += 1;
++       pthread_mutex_unlock(&mymutex); 
+     }
+     printf("thread 0x%0lx ending with counter %ld\n", (long)pthread_self(), *co
+ 
+@@ -25,6 +28,7 @@ int
+ main(int argc, char **argv)
+ {
+     pthread_t thread_a, thread_b;
++    pthread_mutex_init(&mymutex, NULL);
+ 
+     // the shared variable - allocated on the heap
+     long *counter = malloc(sizeof(long));
+@@ -39,5 +43,6 @@ main(int argc, char **argv)
+     printf("end counter value (main thread): %ld\n", *counter);
+ 
+     free(counter);
++    pthread_mutex_destroy(&mymutex);
+     return 0;
+ }
+
+
+5. diff --git a/Lab5/list.c b/Lab5/list.c
+index 158fdbc..ef73bfa 100644
+--- a/Lab5/list.c
++++ b/Lab5/list.c
+@@ -1,10 +1,15 @@
++
++#include <pthread.h>
+ #include "list.h"
+ 
+ /* ************************************** 
+  *
+  * ************************************** */
++
++
+ void list_init(list_t *list) {
+     list->head = NULL;
++    pthread_mutex_init (&list->themutex, NULL);
+ }
+ 
+ 
+@@ -12,6 +17,7 @@ void list_init(list_t *list) {
+  * print the contents of the list to file f.
+  * ************************************** */
+ void list_print(list_t *list, FILE *f) {
++    pthread_mutex_lock(&list->themutex);
+     printf("*** List Contents Begin ***\n");
+     struct __list_node *tmp = list->head;
+     while (tmp) {
+@@ -19,6 +25,7 @@ void list_print(list_t *list, FILE *f) {
+         tmp = tmp->next;
+     }
+     printf("*** List Contents End ***\n");
++    pthread_mutex_unlock(&list->themutex);
+ }
+ 
+ 
+@@ -26,12 +33,13 @@ void list_print(list_t *list, FILE *f) {
+  * add item "val" to the list, in order.
+  * ************************************** */
+ void list_add(list_t *list, int val) {
++    pthread_mutex_lock(&list->themutex);
+     struct __list_node *new_node = (struct __list_node *)malloc (sizeof(struct 
+     if (!new_node) {
+         fprintf(stderr, "No memory while attempting to create a new list node!\
+         abort();
+     }
+-
++    
+     new_node->data = val;
+     new_node->next = NULL;
+ 
+@@ -59,6 +67,7 @@ void list_add(list_t *list, int val) {
+             tmp->next = new_node;
+         }
+     }
++    pthread_mutex_unlock(&list->themutex);
+ }
+ 
+ 
+@@ -72,24 +81,24 @@ int list_remove(list_t *list, int target) {
+     /* short cut: is the list empty? */
+     if (list->head == NULL)
+         return removed;
+-
++    pthread_mutex_lock(&list->themutex);
+     /* check for removing items at the head */
+     struct __list_node *dead = NULL;
+     struct __list_node *tmp = list->head;
+-    while (tmp != NULL && tmp->data == target) {
+-        dead = tmp;
++    while (tmp != NULL && tmp->data == target) {       
++       dead = tmp;
+         tmp = tmp->next;
+         free(dead);
+         removed += 1;
+     }
+     list->head = tmp;
+-
++    pthread_mutex_unlock(&list->themutex);
+     /* if we removed anything or the data at the head is greater than
+        the target, we're done (since the list is sorted */
+     if (removed > 0 || target < tmp->data) {
+         return removed;
+     }
+-
++    pthread_mutex_lock(&list->themutex);
+     /* find the target to destroy (if it exists). 
+        keep track of previous node using dead.  */
+     dead = tmp;
+@@ -110,7 +119,7 @@ int list_remove(list_t *list, int target) {
+             removed += 1;
+         }
+     }
+-
++    pthread_mutex_unlock(&list->themutex);
+     return removed;
+ }
+ 
+@@ -120,6 +129,7 @@ int list_remove(list_t *list, int target) {
+  * elements.
+  * ************************************** */
+ void list_clear(list_t *list) {
++    pthread_mutex_lock(&list->themutex);
+     struct __list_node *tmp = list->head;
+     while (tmp) {
+         struct __list_node *tmp2 = tmp->next;
+@@ -127,5 +137,6 @@ void list_clear(list_t *list) {
+         tmp = tmp2;
+     }
+     list->head = NULL;
++    pthread_mutex_unlock(&list->themutex);
+ }
+ 
+diff --git a/Lab5/list.h b/Lab5/list.h
+index 0528ba2..c02aeb9 100644
+--- a/Lab5/list.h
++++ b/Lab5/list.h
+@@ -1,3 +1,5 @@
++#include <pthread.h>
++
+ #ifndef __LIST_H__
+ #define __LIST_H__
+ 
+@@ -12,6 +14,7 @@ struct __list_node {
+ 
+ typedef struct {
+     struct __list_node *head;
++    pthread_mutex_t themutex;
+ } list_t;
+ 
+ void list_init(list_t *);
+
