@@ -24,8 +24,8 @@ typedef struct hashtable_ {
 } hashtable_t;
 
 int hash(hashtable_t * hash, char * str);
-int nexthighestPrime(hashtable_t * hashtable, int x);
-int isPrime(hashtable_t * hashtable, int x);
+int nexthighestPrime(int x);
+int isPrime(int x);
 
 // create a new hashtable; parameter is a size hint
 hashtable_t *hashtable_new(int);
