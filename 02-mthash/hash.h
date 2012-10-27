@@ -5,10 +5,27 @@
 #include <pthread.h>
 #include <string.h>
 #include <errno.h>
+#include <stdbool.h>
+#include <math.h>
+
+struct _hash_node {
+    char * string;
+    struct _hash_node *next;
+};
 
 typedef struct {
+    struct _hash_node *head;
+} list_t;
 
+typedef struct hashtable_ {
+	pthread_mutex_t mutex;
+	int size;
+	list_t ** table;	
 } hashtable_t;
+
+int hash(hashtable_t * hash, char * str);
+int nexthighestPrime(hashtable_t * hashtable, int x);
+int isPrime(hashtable_t * hashtable, int x);
 
 // create a new hashtable; parameter is a size hint
 hashtable_t *hashtable_new(int);

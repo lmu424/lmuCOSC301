@@ -11,7 +11,7 @@ DEPS = hash.h
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) -pthread
+	$(CC) $(CFLAGS) -o $@ $(OBJS) -pthread -lm
 
 .c.o: $(DEPS)
 	$(CC) $(CFLAGS) -c $<
