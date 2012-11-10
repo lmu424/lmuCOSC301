@@ -1,3 +1,13 @@
+/*  Laura Uhlig, Project 3
+
+Used the consumer/producer method with 2 condition variables and 1 mutex through an array that I use as a queue- as the server gets a request, the socket is added to the queue.  The consumer (threadwork) gets each socket FIFO and will get the request and remove it from the queue.  
+
+At one point my code was getting to poll, I would call webdriver.py in another terminal, and it would continue until a segfault with placing new_sock into my queue.  I had a lot of issues with what I should malloc, and how to avoid various segfaults (I mirrored the code used it mtlist.c from lab 5, when there was a linked list, and tried to make my queue a linked list, but this gave me numerous errors with malloc that I could not figure out, so I switched to the array). I think I solved the segfault issue here (it stopped complaining, at least), but by doing that caused another problem.  I'm not sure which would be easier.
+
+*/
+
+
+
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,10 +19,9 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
-#include "list.h"
-
-
 #include "network.h"
+
+
 
 
 // global variable; can't be avoided because
@@ -22,7 +31,7 @@ void signal_handler(int sig) {
     still_running = FALSE;
 }
 
-struct threadargs {
+typedef struct thread__args {
     int * thequeue;
     int first;
     int count;
@@ -30,64 +39,81 @@ struct threadargs {
     pthread_mutex_t mutex;
     pthread_cond_t cond1;
     pthread_cond_t cond2;
-} ;
+} threadargs;
 
-void * threadwork(struct threadargs * v){
+void * threadwork(void * v){
 	while (still_running){
-		struct threadargs * targs = (struct threadargs *)v;
+		threadargs * targs = (threadargs *)v;
 		pthread_mutex_lock(&targs->mutex);
 		//wait for there to be something on the queue
-		while (targs->size == targs->count) {
+		while (targs->count == 0) {
 			pthread_cond_wait(&targs->cond1, &targs->mutex); }
 
+		
 		char * buffer = malloc(sizeof(char *));
 		char * newbuf = malloc(sizeof(char *));
-		char * readbuf = malloc(sizeof(char*));
+		char * readbuf = malloc(sizeof(char *));
 		char * temp = NULL;
+		const time_t * tod;
+		struct tm *result;
 		//getcwd(newbuf, 1024);
-		FILE * fp;
+		int fp;
 		int new_sock = targs->thequeue[targs->first];
-		targs->first++;
-		targs->count--;
 		
+		
+		/*right now, my code ignores the while loop and cond_wait and keeps going, calling getrequest() before poll gets a file, so this segfaults and fails. I have not been able to test the following code*/
+
+
 		//Get the request
 		getrequest(new_sock, buffer, 1024);
+		//check if file exists with stat call
 		struct stat check;
+		// if it does not exist, call 404
 		if (stat(buffer, &check) == 0) {
 			sprintf(temp, HTTP_404);
 			temp = "404";
 		}
 		else {
-			sprintf(temp, HTTP_200, check.st_size); 
+		//if it does exist, print HTTP
+			sprintf(temp, HTTP_200,(int)check.st_size); 
 			temp = "200";
 			if (buffer[0] == '/'){
-				*buffer = buffer[1]; }
-			fp = open(buffer, NULL);
+				buffer = &buffer[1]; }
+			//open file for read
+			fp = open(buffer, O_RDONLY);
+			//read file, put in buffer
 			read(fp, readbuf, 1024); 
+			//send back to browser
 			if (senddata(new_sock, readbuf, strlen(readbuf)) == -1){
 				printf("Error"); }
-			close(readbuf);
+			close(fp);
 			free(readbuf);
 		}
 
+		//opened, read, and closed file- now, decrease count and signal cond just in case someone is waiting and count was full before
+		targs->count--;
+		targs->first++;
 		pthread_cond_signal(&targs->cond2);
 		pthread_mutex_unlock(&targs->mutex);
+
+		//lock and unlock so a new thread can deal with a request
 		pthread_mutex_lock(&targs->mutex);
 		int fw;
-		fw = open("weblog.txt", NULL);
+		//open file to write to
+		fw = open("weblog.txt", O_RDWR);
 		char * anotherbuffer = malloc(sizeof(char *));
-		const time_t tod;
-		struct tm *result;
-		result = asctime(localtime_r(tod, result));
+		//get time stamp
+		char * thetime = asctime(localtime_r(tod, result));
 		struct sockaddr_in client_address;
-		sprintf(anotherbuffer, "%s:%d  %s  \"GET %s \"  %s  %d", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port), result, buffer, temp, check.st_size);
-		
+		//put info into a buffer
+		sprintf(anotherbuffer, "%s:%d  %s  \"GET %s \"  %s  %d", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port), thetime, buffer, temp, (int)check.st_size);
+		//write buffer to file
 		write(fw, anotherbuffer, 1024);
 		close(fw);
 		pthread_mutex_unlock(&targs->mutex);
+		//free malloc'd buffers
 		free(newbuf);
 		free(buffer);
-		free(readbuf);
 		free(anotherbuffer);
 	}
 	return;
@@ -107,16 +133,12 @@ void runserver(int numthreads, unsigned short serverport) {
 
     //////////////////////////////////////////////////
 	
-	//create the queue, malloc
-   // list_t * queue = (list_t*)malloc(sizeof(list_t)) ;
-   // list_init(queue);
-	
 	//declare struct variables
-        struct threadargs * thread_args;
+        threadargs * thread_args;// = (threadargs *) malloc(sizeof(threadargs));
 	thread_args->first = 0;
 	thread_args->count = 0;
 	thread_args->size = numthreads;
-	thread_args->thequeue[numthreads];
+	thread_args->thequeue = (int *)malloc(sizeof(int)*numthreads);
 	pthread_mutex_init(&thread_args->mutex, NULL);
 	pthread_cond_init(&thread_args->cond1, NULL);
 	pthread_cond_init(&thread_args->cond2, NULL);
@@ -130,6 +152,7 @@ void runserver(int numthreads, unsigned short serverport) {
 	fprintf(stderr, "Error creating thread: %s\n", strerror(errno)); }
     }
     
+	//socket code
     int main_socket = prepare_server_socket(serverport);
     if (main_socket < 0) {
         exit(-1);
@@ -140,6 +163,8 @@ void runserver(int numthreads, unsigned short serverport) {
     socklen_t addr_len;
 
     fprintf(stderr, "Server listening on port %d.  Going into request loop.\n", serverport);
+
+	//begin while loop
     while (still_running) {
 	pthread_mutex_lock(&thread_args->mutex);
         struct pollfd pfd = {main_socket, POLLIN};
@@ -158,7 +183,6 @@ void runserver(int numthreads, unsigned short serverport) {
 
         int new_sock = accept(main_socket, (struct sockaddr *)&client_address, &addr_len);
         if (new_sock > 0) {
-            
             fprintf(stderr, "Got connection from %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
 
            ////////////////////////////////////////////////////////
@@ -170,47 +194,30 @@ void runserver(int numthreads, unsigned short serverport) {
             * when you're done.
             */
            ////////////////////////////////////////////////////////
-	//Malloc the new node
-	/*struct __list_node *new_node = (struct __list_node *)malloc (sizeof(struct __list_node));
-	if (!new_node) {
-		fprintf(stderr, "No memory while attempting to create a new list node!\n");
-		abort();
-    }
-	new_node->data = new_sock;
-	new_node->next = NULL;
-
-	//put new_sock into linked list at the end
-	if (queue->head == NULL) {
-		queue->head = new_node;
-		new_node->next = queue->last;
-		// status will be 1 as long as there is something in the queue, and 0 if there is nothing there to work on
-		thread_args->status = 1;
-	}
-	else if (queue->head != NULL && queue->last == NULL){
-		queue->last = new_node;
-	}
-	else {
-		queue->last->next = new_node;
-		queue->last = queue->last->next;
-	}
-	*/
-
+	
+	//if queue is full, wait until a consumer removes one
 	while(thread_args->count == numthreads){
 		pthread_cond_wait(&thread_args->cond2, &thread_args->mutex); }
 
+	//find where to place new socket
 	int index = (thread_args->first + thread_args->count)%numthreads;
-	thread_args->thequeue[index] = new_sock;
+	memcpy(&thread_args->thequeue[index], &new_sock, new_sock*sizeof(int));
+	//something added to count- increment
 	thread_args->count++;
-
+	//signal consumer to get request
 	pthread_cond_signal(&thread_args->cond1);
 	pthread_mutex_unlock(&thread_args->mutex);
         }
     }
+	//Make threads break while loop- since still_running was false, they should break out of while loop in threadwork (never tested, just assumed)
+    thread_args->count == numthreads/2;
     pthread_cond_broadcast(&thread_args->cond1);
     pthread_cond_broadcast(&thread_args->cond2);
+	//join all of the threads
     for (i = 0; i < numthreads; i++) {
         	pthread_join(threads[i], NULL); }
-	 
+	//free the queue
+    free(thread_args->thequeue);
     fprintf(stderr, "Server shutting down.\n");
     close(main_socket);
 }
