@@ -61,7 +61,7 @@ void * threadwork(void * v){
 		int new_sock = targs->thequeue[targs->first];
 		
 		
-		/*right now, my code ignores the while loop and cond_wait and keeps going, calling getrequest() before poll gets a file, so this segfaults and fails. I have never been able to test the following code*/
+		/*right now, my code ignores the while loop and cond_wait and keeps going, calling getrequest() before poll gets a file, so this segfaults and fails. I have not been able to test the following code*/
 
 
 		//Get the request

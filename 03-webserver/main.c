@@ -49,6 +49,7 @@ void * threadwork(void * v){
 		while (targs->count == 0) {
 			pthread_cond_wait(&targs->cond1, &targs->mutex); }
 
+/*right now, my code ignores the while loop and cond_wait and keeps going, calling getrequest() before poll gets a file, so this segfaults and fails. I have not been able to test the following code*/
 		
 		char * buffer = malloc(sizeof(char *));
 		char * newbuf = malloc(sizeof(char *));
@@ -56,12 +57,12 @@ void * threadwork(void * v){
 		char * temp = NULL;
 		const time_t * tod;
 		struct tm *result;
-		//getcwd(newbuf, 1024);
+
+		//getcwd(newbuf, 1024); 
+//wasn't sure if I needed the directory or just the file name for open- I had a hard time figuring out the man page, it seemed necessary from that, but when I googled examples it seemed like people just used a file... 
+
 		int fp;
 		int new_sock = targs->thequeue[targs->first];
-		
-		
-		/*right now, my code ignores the while loop and cond_wait and keeps going, calling getrequest() before poll gets a file, so this segfaults and fails. I have not been able to test the following code*/
 
 
 		//Get the request
