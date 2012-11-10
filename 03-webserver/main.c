@@ -23,8 +23,10 @@ void signal_handler(int sig) {
 }
 
 struct threadargs {
-    list_t * thequeue;
-    int status;
+    int * thequeue;
+    int first;
+    int count;
+    int size;
     pthread_mutex_t mutex;
     pthread_cond_t cond1;
     pthread_cond_t cond2;
@@ -32,21 +34,21 @@ struct threadargs {
 
 void * threadwork(struct threadargs * v){
 	while (still_running){
-		printf("5\n");
 		struct threadargs * targs = (struct threadargs *)v;
 		pthread_mutex_lock(&targs->mutex);
 		//wait for there to be something on the queue
-		while (targs->status == 0) {
+		while (targs->size == targs->count) {
 			pthread_cond_wait(&targs->cond1, &targs->mutex); }
-		printf("6\n");
 
 		char * buffer = malloc(sizeof(char *));
 		char * newbuf = malloc(sizeof(char *));
 		char * readbuf = malloc(sizeof(char*));
 		char * temp = NULL;
-		getcwd(newbuf, 1024);
+		//getcwd(newbuf, 1024);
 		FILE * fp;
-		int new_sock = targs->thequeue->head->data;
+		int new_sock = targs->thequeue[targs->first];
+		targs->first++;
+		targs->count--;
 		
 		//Get the request
 		getrequest(new_sock, buffer, 1024);
@@ -67,10 +69,6 @@ void * threadwork(struct threadargs * v){
 			close(readbuf);
 			free(readbuf);
 		}
-
-		targs->thequeue->head = targs->thequeue->head->next;
-		if (targs->thequeue->head == NULL){
-			targs->status = 0; }
 
 		pthread_cond_signal(&targs->cond2);
 		pthread_mutex_unlock(&targs->mutex);
@@ -110,27 +108,28 @@ void runserver(int numthreads, unsigned short serverport) {
     //////////////////////////////////////////////////
 	
 	//create the queue, malloc
-    list_t * queue = (list_t*)malloc(sizeof(list_t)) ;
-    list_init(queue);
+   // list_t * queue = (list_t*)malloc(sizeof(list_t)) ;
+   // list_init(queue);
 	
 	//declare struct variables
-        struct threadargs * thread_args = {queue, 0};
+        struct threadargs * thread_args;
+	thread_args->first = 0;
+	thread_args->count = 0;
+	thread_args->size = numthreads;
+	thread_args->thequeue[numthreads];
 	pthread_mutex_init(&thread_args->mutex, NULL);
 	pthread_cond_init(&thread_args->cond1, NULL);
 	pthread_cond_init(&thread_args->cond2, NULL);
    
-	
-
+	//create the threads
    pthread_t threads[numthreads];
     int i = 0;
-	printf("%d", i);
 
     for (i = 0; i < numthreads; i++) {
 	if (0 > pthread_create(&threads[i], NULL, threadwork, (void *)&thread_args)) {
 	fprintf(stderr, "Error creating thread: %s\n", strerror(errno)); }
     }
     
-    printf("1\n");
     int main_socket = prepare_server_socket(serverport);
     if (main_socket < 0) {
         exit(-1);
@@ -171,13 +170,12 @@ void runserver(int numthreads, unsigned short serverport) {
             * when you're done.
             */
            ////////////////////////////////////////////////////////
-	printf("2\n");	
-	struct __list_node *new_node = (struct __list_node *)malloc (sizeof(struct __list_node));
+	//Malloc the new node
+	/*struct __list_node *new_node = (struct __list_node *)malloc (sizeof(struct __list_node));
 	if (!new_node) {
 		fprintf(stderr, "No memory while attempting to create a new list node!\n");
 		abort();
     }
-    printf("3\n");
 	new_node->data = new_sock;
 	new_node->next = NULL;
 
@@ -195,20 +193,25 @@ void runserver(int numthreads, unsigned short serverport) {
 		queue->last->next = new_node;
 		queue->last = queue->last->next;
 	}
-	printf("4\n");
-	threadwork(thread_args);
+	*/
+
+	while(thread_args->count == numthreads){
+		pthread_cond_wait(&thread_args->cond2, &thread_args->mutex); }
+
+	int index = (thread_args->first + thread_args->count)%numthreads;
+	thread_args->thequeue[index] = new_sock;
+	thread_args->count++;
+
 	pthread_cond_signal(&thread_args->cond1);
 	pthread_mutex_unlock(&thread_args->mutex);
         }
     }
     pthread_cond_broadcast(&thread_args->cond1);
     pthread_cond_broadcast(&thread_args->cond2);
-   // for (i = 0; i < numthreads; i++) {
-   //     	pthread_join(threads[i], NULL); }
+    for (i = 0; i < numthreads; i++) {
+        	pthread_join(threads[i], NULL); }
 	 
     fprintf(stderr, "Server shutting down.\n");
-    list_clear(queue);
-    free(queue);
     close(main_socket);
 }
 

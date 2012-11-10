@@ -9,6 +9,7 @@
 
 void list_init(list_t *list) {
     list->head = NULL;
+    list->last = NULL;
     pthread_mutex_init (&list->themutex, NULL);
 }
 

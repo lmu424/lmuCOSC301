@@ -14,6 +14,7 @@ struct __list_node {
 
 typedef struct {
     struct __list_node *head;
+    struct __list_node *last;
     pthread_mutex_t themutex;
 } list_t;
 
